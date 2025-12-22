@@ -23,10 +23,10 @@ class JSONPrettifierApp:
             pass
         
         # Prettifier variables
-        self.input_file = ctk.StringVar()
+        self.input_files = []  # List of selected files
         self.output_folder = ctk.StringVar()
-        self.output_file_path = ctk.StringVar()
         self.processing = False
+        self.delete_original = ctk.BooleanVar(value=False)
         
         self.setup_ui()
         
@@ -61,7 +61,7 @@ class JSONPrettifierApp:
         
         input_label = ctk.CTkLabel(
             input_section,
-            text="Input JSON File",
+            text="Input JSON Files",
             font=ctk.CTkFont(size=14, weight="bold"),
             anchor="w"
         )
@@ -72,8 +72,7 @@ class JSONPrettifierApp:
         
         self.input_entry = ctk.CTkEntry(
             input_container,
-            textvariable=self.input_file,
-            placeholder_text="Select a JSON file to prettify...",
+            placeholder_text="Select JSON files to prettify...",
             height=40,
             font=ctk.CTkFont(size=13),
             state="readonly"
@@ -82,9 +81,9 @@ class JSONPrettifierApp:
         
         input_btn = ctk.CTkButton(
             input_container,
-            text="📁 Browse",
-            command=self.select_input_file,
-            width=120,
+            text="📁 Browse Files",
+            command=self.select_input_files,
+            width=140,
             height=40,
             font=ctk.CTkFont(size=13, weight="bold")
         )
@@ -162,6 +161,22 @@ class JSONPrettifierApp:
         )
         self.detail_label.pack(anchor="w")
         
+        # Delete original file option
+        delete_section = ctk.CTkFrame(content_card, fg_color="transparent")
+        delete_section.pack(fill="x", padx=30, pady=(0, 15))
+        
+        self.delete_checkbox = ctk.CTkCheckBox(
+            delete_section,
+            text="⚠️ Delete original files after prettifying (Use with caution!)",
+            variable=self.delete_original,
+            font=ctk.CTkFont(size=12, weight="bold"),
+            text_color=("#ff6b6b", "#ff5252"),
+            fg_color="#d32f2f",
+            hover_color="#b71c1c",
+            border_color="#d32f2f"
+        )
+        self.delete_checkbox.pack(anchor="w")
+        
         # Process button
         button_container = ctk.CTkFrame(content_card, fg_color="transparent")
         button_container.pack(fill="x", padx=30, pady=(15, 30))
@@ -184,33 +199,37 @@ class JSONPrettifierApp:
         )
         footer_label.pack(pady=(15, 0))
         
-    def select_input_file(self):
-        filename = filedialog.askopenfilename(
-            title="Select JSON file",
+    def select_input_files(self):
+        filenames = filedialog.askopenfilenames(
+            title="Select JSON files (multiple selection enabled)",
             filetypes=[("JSON files", "*.json"), ("All files", "*.*")]
         )
-        if filename:
-            self.input_file.set(filename)
-            input_folder = os.path.dirname(filename)
+        if filenames:
+            self.input_files = list(filenames)
+            # Update display
+            if len(self.input_files) == 1:
+                self.input_entry.configure(state="normal")
+                self.input_entry.delete(0, 'end')
+                self.input_entry.insert(0, os.path.basename(self.input_files[0]))
+                self.input_entry.configure(state="readonly")
+            else:
+                self.input_entry.configure(state="normal")
+                self.input_entry.delete(0, 'end')
+                self.input_entry.insert(0, f"{len(self.input_files)} files selected")
+                self.input_entry.configure(state="readonly")
+            
+            # Set output folder to first file's directory
+            input_folder = os.path.dirname(self.input_files[0])
             self.output_folder.set(input_folder)
-            self.update_output_path()
             
     def select_output_folder(self):
         folder = filedialog.askdirectory(title="Select output folder")
         if folder:
             self.output_folder.set(folder)
-            self.update_output_path()
-    
-    def update_output_path(self):
-        if self.input_file.get() and self.output_folder.get():
-            input_filename = os.path.basename(self.input_file.get())
-            name, ext = os.path.splitext(input_filename)
-            output_filename = name + "_pretty" + ext
-            self.output_file_path.set(os.path.join(self.output_folder.get(), output_filename))
             
     def process_file(self):
-        if not self.input_file.get():
-            messagebox.showerror("Error", "Please select an input file!")
+        if not self.input_files:
+            messagebox.showerror("Error", "Please select input files!")
             return
             
         if not self.output_folder.get():
@@ -223,39 +242,155 @@ class JSONPrettifierApp:
             
         self.processing = True
         self.process_btn.configure(state="disabled", text="⏳ Processing...")
-        thread = threading.Thread(target=self.prettify_json, daemon=True)
+        thread = threading.Thread(target=self.prettify_multiple_files, daemon=True)
         thread.start()
         
-    def prettify_json(self):
+    def prettify_multiple_files(self):
+        total_files = len(self.input_files)
+        delete_orig = self.delete_original.get()
+        processed_files = []
+        failed_files = []
+        files_to_delete = []
+        
+        overall_start = time.time()
+        
         try:
-            p = self.input_file.get()
-            out = self.output_file_path.get()
+            for idx, input_path in enumerate(self.input_files, 1):
+                try:
+                    input_filename = os.path.basename(input_path)
+                    name, ext = os.path.splitext(input_filename)
+                    output_filename = name + "_pretty" + ext
+                    output_path = os.path.join(self.output_folder.get(), output_filename)
+                    
+                    file_size = os.path.getsize(input_path)
+                    file_start = time.time()
+                    
+                    # Phase 1: Reading (0-40% of file progress)
+                    base_progress = (idx - 1) / total_files
+                    file_progress_weight = 1.0 / total_files
+                    
+                    self.root.after(0, self.update_progress,
+                                  base_progress,
+                                  f"[{idx}/{total_files}] Reading: {input_filename}")
+                    self.root.after(0, self.update_status,
+                                  f"⚙️ Reading file {idx} of {total_files}...", "normal")
+                    
+                    # Read file with progress tracking
+                    with open(input_path, 'r', encoding='utf-8') as f:
+                        content = f.read()
+                    
+                    # Update: Reading complete (40%)
+                    self.root.after(0, self.update_progress,
+                                  base_progress + (file_progress_weight * 0.4),
+                                  f"[{idx}/{total_files}] Parsing: {input_filename}")
+                    
+                    # Phase 2: Parsing JSON (40-60%)
+                    data = json.loads(content)
+                    
+                    # Update: Parsing complete (60%)
+                    self.root.after(0, self.update_progress,
+                                  base_progress + (file_progress_weight * 0.6),
+                                  f"[{idx}/{total_files}] Formatting: {input_filename}")
+                    
+                    # Phase 3: Formatting (60-80%)
+                    formatted = json.dumps(data, indent=2, ensure_ascii=False, separators=(',', ': '))
+                    
+                    # Update: Formatting complete (80%)
+                    self.root.after(0, self.update_progress,
+                                  base_progress + (file_progress_weight * 0.8),
+                                  f"[{idx}/{total_files}] Writing: {input_filename}")
+                    
+                    # Phase 4: Writing (80-100%)
+                    with open(output_path, 'w', encoding='utf-8') as w:
+                        w.write(formatted)
+                        w.write('\n')
+                    
+                    file_elapsed = time.time() - file_start
+                    
+                    # Update: File complete (100%)
+                    self.root.after(0, self.update_progress,
+                                  base_progress + file_progress_weight,
+                                  f"[{idx}/{total_files}] ✓ Complete: {input_filename} ({file_elapsed:.2f}s)")
+                    
+                    processed_files.append((input_filename, file_elapsed))
+                    
+                    # Track for deletion if requested
+                    if delete_orig:
+                        files_to_delete.append(input_path)
+                    
+                except Exception as e:
+                    failed_files.append((os.path.basename(input_path), str(e)))
+                    # Show error for this file
+                    self.root.after(0, self.update_progress,
+                                  (idx) / total_files,
+                                  f"[{idx}/{total_files}] ✗ Failed: {os.path.basename(input_path)}")
             
-            start_time = time.time()
+            # Final progress update
+            overall_elapsed = time.time() - overall_start
+            self.root.after(0, self.update_progress, 1.0, f"100% • ✓ Complete in {overall_elapsed:.2f}s!")
+            self.root.after(0, self.update_status, "✓ All files processed!", "success")
             
-            self.root.after(0, self.update_status, "⚙️ Processing...", "normal")
+            # Show completion dialog
+            def show_completion():
+                success_count = len(processed_files)
+                fail_count = len(failed_files)
+                
+                result_msg = f"Processing Complete!\n\n"
+                result_msg += f"✓ Successful: {success_count} file(s)\n"
+                if fail_count > 0:
+                    result_msg += f"✗ Failed: {fail_count} file(s)\n"
+                result_msg += f"\nTotal time: {overall_elapsed:.2f} seconds\n"
+                result_msg += f"Output folder: {self.output_folder.get()}"
+                
+                if failed_files:
+                    result_msg += "\n\nFailed files:\n"
+                    for fname, err in failed_files[:5]:  # Show first 5 failures
+                        result_msg += f"• {fname}: {err[:50]}\n"
+                
+                messagebox.showinfo("Batch Processing Complete", result_msg)
+                
+                # Handle deletion if requested
+                if delete_orig and files_to_delete:
+                    delete_result = messagebox.askyesno(
+                        "Delete Original Files?",
+                        f"⚠️ WARNING: Delete {len(files_to_delete)} original file(s)?\n\nThis action CANNOT be undone!",
+                        icon='warning'
+                    )
+                    if delete_result:
+                        deleted = 0
+                        delete_errors = []
+                        for fpath in files_to_delete:
+                            try:
+                                os.remove(fpath)
+                                deleted += 1
+                            except Exception as del_err:
+                                delete_errors.append((os.path.basename(fpath), str(del_err)))
+                        
+                        del_msg = f"Deleted {deleted} file(s)"
+                        if delete_errors:
+                            del_msg += f"\n\nFailed to delete {len(delete_errors)} file(s)"
+                        messagebox.showinfo("Deletion Complete", del_msg)
+                
+                self.reset_ui()
             
-            # Original fast implementation
-            with open(p, 'r', encoding='utf-8') as f:
-                data = json.load(f)
-            
-            with open(out, 'w', encoding='utf-8') as w:
-                json.dump(data, w, indent=2, ensure_ascii=False, separators=(',', ': '))
-                w.write('\n')
-            
-            elapsed = time.time() - start_time
-            
-            self.root.after(0, self.update_progress, 1.0, f"100% • ✓ Complete in {elapsed:.2f}s!")
-            self.root.after(0, self.update_status, "✓ Complete!", "success")
-            self.root.after(0, lambda: messagebox.showinfo("Success", f"JSON prettified successfully!\n\nSaved to:\n{out}\n\nTime: {elapsed:.2f} seconds"))
+            self.root.after(0, show_completion)
             
         except Exception as e:
             self.root.after(0, self.update_status, f"✗ Error: {str(e)}", "error")
-            self.root.after(0, lambda: messagebox.showerror("Error", f"An error occurred:\n{str(e)}"))
+            def show_error():
+                messagebox.showerror("Error", f"An error occurred:\n{str(e)}")
+                self.reset_ui()
+            self.root.after(0, show_error)
             
         finally:
             self.processing = False
             self.root.after(0, lambda: self.process_btn.configure(state="normal", text="✨ Prettify JSON"))
+    
+    def reset_ui(self):
+        """Reset UI to ready state after dialog closes"""
+        self.progress_bar.set(0)
+        self.detail_label.configure(text="")
+        self.status_label.configure(text="✓ Ready to process")
             
     def update_progress(self, percent, detail):
         self.progress_bar.set(percent)
