@@ -17,8 +17,8 @@ class JSONPrettifierApp:
         ctk.set_default_color_theme("blue")
         
         try:
-            if os.path.exists("json_logo_icon_168490.ico"):
-                self.root.iconbitmap("json_logo_icon_168490.ico")
+            if os.path.exists("icon.ico"):
+                self.root.iconbitmap("icon.ico")
         except:
             pass
         
