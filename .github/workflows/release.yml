@@ -1,8 +1,16 @@
 name: Build and Release EXE
 
 on:
-  release:
-    types: [published]
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "Release version (e.g. 1.0.0)"
+        required: true
+        default: "1.0.0"
+      release_notes:
+        description: "What's new in this release?"
+        required: false
+        default: "Bug fixes and improvements."
 
 permissions:
   contents: write
@@ -26,7 +34,27 @@ jobs:
       - name: Build EXE with PyInstaller
         run: pyinstaller JSON-Prettifier.spec
 
-      - name: Upload EXE to Release
+      - name: Create GitHub Release and upload EXE
         uses: softprops/action-gh-release@v2
         with:
+          tag_name: "v${{ github.event.inputs.version }}"
+          name: "JSON Prettifier v${{ github.event.inputs.version }}"
+          body: |
+            ## JSON Prettifier v${{ github.event.inputs.version }}
+
+            ${{ github.event.inputs.release_notes }}
+
+            ---
+
+            ### Download
+            Download **JSON-Prettifier.exe** below — no installation needed, just run it.
+
+            ### What it does
+            A lightweight Windows desktop app to batch-format ugly JSON files into clean,
+            human-readable output. Select one or multiple `.json` files, choose an output
+            folder, and hit **Prettify JSON**.
+
+            **Built by Harshmeet Singh**
+          draft: false
+          prerelease: false
           files: dist/JSON-Prettifier.exe
