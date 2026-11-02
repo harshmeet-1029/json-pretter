@@ -46,13 +46,36 @@ jobs:
 
             ---
 
-            ### Download
-            Download **JSON-Prettifier.exe** below — no installation needed, just run it.
+            ## What is JSON Prettifier?
 
-            ### What it does
-            A lightweight Windows desktop app to batch-format ugly JSON files into clean,
-            human-readable output. Select one or multiple `.json` files, choose an output
-            folder, and hit **Prettify JSON**.
+            JSON Prettifier is a lightweight Windows desktop app that formats messy, minified, or hard-to-read JSON files into clean, properly indented output — instantly and with no setup required.
+
+            Whether you are debugging API responses, reviewing config files, or just trying to make sense of a wall of JSON, this tool makes it readable in seconds.
+
+            ---
+
+            ## Features
+
+            - **Batch processing** — select and prettify multiple `.json` files at once
+            - **Custom output folder** — save formatted files wherever you want, or defaults to the same folder as your input
+            - **Non-destructive by default** — original files are never touched unless you explicitly enable the delete option
+            - **Progress tracking** — live progress bar shows exactly which file is being processed and how long it takes
+            - **No installation needed** — single portable `.exe`, just download and run
+
+            ---
+
+            ## How to Use
+
+            1. Download **JSON-Prettifier.exe** from the Assets section below
+            2. Double-click to run it — no installer, no Python required
+            3. Click **Browse Files** and select one or more `.json` files
+            4. Optionally click **Choose Folder** to set a custom output location (defaults to the input file's folder)
+            5. Click **✨ Prettify JSON**
+            6. Your formatted files will be saved with `_pretty` added to the filename (e.g. `data.json` → `data_pretty.json`)
+
+            > **Optional:** Check the "Delete original files" box if you want the originals removed after processing. You will be asked to confirm before anything is deleted.
+
+            ---
 
             **Built by Harshmeet Singh**
           draft: false
